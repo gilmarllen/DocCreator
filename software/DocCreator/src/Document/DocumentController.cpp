@@ -393,6 +393,57 @@ DocumentController::addCharacter(const QString &s, int id)
   setModified();
 }
 
+bool DocumentController::fitsWord(qreal currentTextBlockWidth, qreal currentTextBlockMarginRight, const QList<QString> &charList, int idx, Models::Font *font)
+{
+  // qDebug() << "currentTextBlockWidth: " << currentTextBlockWidth;
+  // qDebug() << "currentTextBlockMarginRight: " << currentTextBlockMarginRight;
+  // qDebug() << "CHR> " << charList[idx-1];
+  
+  const QString newLine = QStringLiteral("\n");
+  const QString space = QStringLiteral(" ");
+
+  // Check if is the first char in the word
+  if(!idx || charList[idx-1]==newLine || charList[idx-1]==space)
+  {
+    qreal _cursorRightLineTmp = _cursorRightLine;
+    int listLen = charList.size();
+    // qDebug() << "listLen: " << listLen;
+    for (int i=idx; i<listLen; i++) {
+      const QString s = charList[i];
+      if(s==newLine || s==space) break;
+      
+      Models::Character *character = font->getCharacter(s);
+      // Check if the character found in font
+      if(character != nullptr)
+      {
+        // qDebug() << "CHECKPOINT ##1: " << s << "   //   " << character;
+        const Models::CharacterData *charData = character->getRandomCharacterData();
+        assert(charData);
+        // qDebug() << "CHECKPOINT #2";
+
+        qreal right = _cursorRightLineTmp +
+                      (charData->width() *
+                      (character->getRightLine() - character->getLeftLine())) /
+                        100;
+        // qDebug() << "right: " << right;
+        // qDebug() << "_cursorRightLineTmp: " << _cursorRightLineTmp;
+        if (right >=
+            (currentTextBlockWidth - currentTextBlockMarginRight)) {
+          //Not enough space on line to add the word
+          // qDebug() << "FALSE";
+          return false;
+        }
+
+        _cursorRightLineTmp = right;
+      }
+      
+    }
+    // qDebug() << "_cursorRightLineTmp: " << _cursorRightLineTmp;
+  }
+  // qDebug() << "TRUE";
+  return true;
+}
+
 void
 DocumentController::addCharacters(const QList<QString> &charList)
 {
@@ -454,10 +505,11 @@ DocumentController::addCharacters(const QList<QString> &charList)
   //Warning: CODE DUPLICATION with GraphicsTextBlockItem::drawCharacter() !!!
 
   //
+  int idx=0;
   for (const QString &s : charList) {
 
     Models::Character *character = font->getCharacter(s);
-
+    idx++;
     if (character != nullptr) {
 
       if (_cursorBaseLine >=
@@ -475,22 +527,35 @@ DocumentController::addCharacters(const QList<QString> &charList)
                     (charData->width() *
                      (character->getRightLine() - character->getLeftLine())) /
                       100;
-      if (right >=
-          (currentTextBlock->width() - currentTextBlock->marginRight())) {
+      if (!fitsWord(currentTextBlock->width(), currentTextBlock->marginRight(), charList, idx-1, font) || (right >=
+          (currentTextBlock->width() - currentTextBlock->marginRight())) ) {
         //Not enough space on line to add character
         _cursorBaseLine += lineSpacing;
+        // qDebug() << "=>  Debug: " << s << " _cursorBaseLine:" << _cursorBaseLine; 
         _cursorRightLine = currentTextBlock->marginLeft();
         right = _cursorRightLine +
                 (charData->width() *
                  (character->getRightLine() - character->getLeftLine())) /
                   100;
+
+        // qDebug() << (right >= (currentTextBlock->width() - currentTextBlock->marginRight()));
+        // qDebug() << (_cursorBaseLine >= (currentTextBlock->height() - currentTextBlock->marginBottom()));
         if (right >=
               (currentTextBlock->width() - currentTextBlock->marginRight()) &&
             _cursorBaseLine >=
               (currentTextBlock->height() - currentTextBlock->marginBottom())) {
           //not enough space on new line
+          qDebug() << "=>  BREAK";
           break;
         }
+
+        if(_cursorBaseLine >= (currentTextBlock->height() - currentTextBlock->marginBottom()))
+          break;
+
+        // Force endline
+        const int currentLineSpacing = getParagraphLineSpacing();
+        this->addParagraph();
+        setParagraphLineSpacing(currentLineSpacing);
       }
       //const qreal base = _cursorBaseLine - (charData->height() * character->getBaseLine())/100;
       //const qreal left = _cursorRightLine - (charData->width() * character->getLeftLine())/100;

@@ -12,6 +12,9 @@ namespace Doc {
 class Block;
 class Document;
 }
+namespace Models{
+  class Font;
+};
 
 class DocumentController
   : public Mvc::IController
@@ -57,6 +60,7 @@ public:
 
   void addCharacter(const QString &s, int id = -1);
   void addCharacters(const QList<QString> &charList);
+  bool fitsWord(qreal currentTextBlockWidth, qreal currentTextBlockMarginRight, const QList<QString> &charList, int idx, Models::Font *font);
   void addParagraph();
   void addTextBlock();
   void addTextBlock(int x, int y, int w, int h);
